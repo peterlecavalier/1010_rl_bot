@@ -65,16 +65,14 @@ pieces_specs = {
 }
 
 
-class game_1010(Env):
+class game_1010_v0(Env):
     def __init__(self, seed=None):
-        super(game_1010, self).__init__()
-        
         # Grid observation space
         self.grid_shape = (10, 10)
         # grid_space is the 10x10 grid
         self.grid_space = spaces.Box(low=0, high=1, shape=self.grid_shape, dtype=int)
         # pieces_space is each of the 3 piece elements
-        self.pieces_space = spaces.MultiDiscrete([20, 20, 20])
+        self.pieces_space = spaces.Box(low=0, high=20, shape=(3,), dtype=int)
         
         # Observation space includes the grid AND pieces we have available
         self.observation_space = spaces.Tuple((self.grid_space, self.pieces_space))
@@ -97,7 +95,11 @@ class game_1010(Env):
         self.points = 0
         
         # Set up rng
-        self.rng, self.rng_seed = gym.utils.seeding.np_random(seed)
+        # if seed is not None:
+        #     self.rng, self.rng_seed = gym.utils.seeding.np_random(seed)
+        # else:
+        self.rng = np.random
+        self.rng_seed = 0
     
     def pick_new_pieces(self, choices=[None, None, None]):
         for i in range(3):
@@ -120,6 +122,8 @@ class game_1010(Env):
         # Reset grid to be zero everywhere
         self.grid = np.zeros_like(self.grid)
         self.color_grid = np.zeros_like(self.color_grid)
+
+        return (self.grid, self.pieces)
         
     def expand_arr(self, arr, mult=2, target_shape=(10,10, 3)):
         new_arr = np.zeros_like(arr, shape=(arr.shape[0] * mult, arr.shape[1], 3))
@@ -203,7 +207,7 @@ class game_1010(Env):
         # reward is the additional points from executing that move
         done, reward = self.execute_action(action)
     
-        return (self.grid, self.pieces), reward, done, []
+        return (self.grid, self.pieces), reward, done, {}
     
     def row_col_clear_points(self, num):
         if num < 1:
@@ -328,10 +332,10 @@ class game_1010(Env):
 
 if __name__ == "__main__":   
     # If you want to test on a specific seed
-    # env = game_1010(seed=0)
+    # env = game_1010_v0(seed=0)
     # env.action_space.seed(0)
     
-    env = game_1010()
+    env = game_1010_v0()
     obs = env.reset()
     
     
