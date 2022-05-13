@@ -67,15 +67,22 @@ pieces_specs = {
 
 class game_1010_v0(Env):
     def __init__(self, seed=None):
+        super(game_1010_v0, self).__init__()
+
         # Grid observation space
         self.grid_shape = (10, 10)
         # grid_space is the 10x10 grid
         self.grid_space = spaces.Box(low=0, high=1, shape=self.grid_shape, dtype=int)
         # pieces_space is each of the 3 piece elements
         self.pieces_space = spaces.Box(low=0, high=20, shape=(3,), dtype=int)
-        
-        # Observation space includes the grid AND pieces we have available
-        self.observation_space = spaces.Tuple((self.grid_space, self.pieces_space))
+        self.valid_mask_space = spaces.Box(low=0, high=1, shape=(300,), dtype=int)
+
+        # Observation space includes the grid, pieces we have available, and invalid action mask
+        self.state_space = spaces.Tuple((self.grid_space, self.pieces_space))
+        self.observation_space = spaces.Dict({
+            "action_mask": self.valid_mask_space,
+            "state": self.state_space
+        })
         
         # Action space accounts for all the possible placements of 3 pieces
         self.action_space = spaces.Discrete(300)
@@ -91,6 +98,9 @@ class game_1010_v0(Env):
         self.pieces = [0, 0, 0]
         self.pieces_colors = [None, None, None]
         
+        # Valid moves
+        self.valid_moves = [0] * 300
+        
         # Start the game off with 0 points
         self.points = 0
         
@@ -100,30 +110,57 @@ class game_1010_v0(Env):
         # else:
         self.rng = np.random
         self.rng_seed = 0
-    
-    def pick_new_pieces(self, choices=[None, None, None]):
-        for i in range(3):
-            if choices[i] is None:
-                #self.pieces[i] = np.random.randint(1, 20)
-                self.pieces[i] = self.rng.randint(1, 20)
-            else:
-                self.pieces[i] = choices[i]
-            #self.pieces_colors[i] = np.random.randint(256, size=3)
-            self.pieces_colors[i] = self.rng.randint(256, size=3)
-        
-    
+
     def reset(self):
         # Reset points back to 0
         self.points = 0
         
         # Generate random pieces
         self.pick_new_pieces()
+
+        # All moves are valid
+        self.valid_moves = [1] * 300
         
         # Reset grid to be zero everywhere
         self.grid = np.zeros_like(self.grid)
         self.color_grid = np.zeros_like(self.color_grid)
 
-        return (self.grid, self.pieces)
+        return {"action_mask": self.valid_moves, "state": (self.grid, self.pieces)}
+
+    def step(self, action):
+        # Terminate an episode if:
+        # 1) we lose the game
+        # 2) the agent attempts to use an empty piece
+        # 3) the agent attempts to place a piece in an invalid spot
+        
+        # The action must be in the bounds of the action space first
+        assert self.action_space.contains(action), "Invalid Action"
+        
+        # Add the block to the grid
+        # valid is true if the move was valid, false if not
+        # reward is the additional points from executing that move
+        done, reward = self.execute_action(action)
+    
+        return {"action_mask": self.valid_moves, "state": (self.grid, self.pieces)}, reward, done, {}
+
+    def pick_new_pieces(self, choices=[None, None, None]):
+        # Pick new pieces for the game
+        # Also handles invalid action masking
+        for i in range(3):
+            if choices[i] is None:
+                self.pieces[i] = self.rng.randint(1, 20)
+            else:
+                self.pieces[i] = choices[i]
+            self.pieces_colors[i] = self.rng.randint(256, size=3)
+
+    def update_valid_moves(self):
+        # Check which moves are valid
+        for i in range(self.action_space.n):
+            done = self.check_valid_move(i, ret_grid=False)
+            if not done:
+                self.valid_moves[i] = 1
+            else:
+                self.valid_moves[i] = 0  
         
     def expand_arr(self, arr, mult=2, target_shape=(10,10, 3)):
         new_arr = np.zeros_like(arr, shape=(arr.shape[0] * mult, arr.shape[1], 3))
@@ -155,8 +192,8 @@ class game_1010_v0(Env):
         
         return copy_arr
         
-    def render(self, mode ="human"):
-        assert mode in ["human", "rgb_array"], "Invalid mode, must be either \"human\" or \"rgb_array\""
+    def render(self, mode ="evaluate"):
+        assert mode in ["human", "rgb", "evaluate"], "Invalid mode, must be either \"human\", \"evaluate\", or \"rgb_array\""
         
         expand_grid = self.expand_arr(np.copy(self.color_grid), 
                                       mult=3, 
@@ -185,29 +222,16 @@ class game_1010_v0(Env):
             cv2.namedWindow("1010!", cv2.WINDOW_NORMAL)
             cv2.imshow("1010!", final_show)
             cv2.waitKey(0)
+        if mode == "evaluate":
+            cv2.namedWindow("1010!", cv2.WINDOW_NORMAL)
+            cv2.imshow("1010!", final_show)
+            cv2.waitKey(5)
         
-        elif mode == "rgb_array":
+        elif mode == "rgb":
             return final_show
         
     def close(self):
         cv2.destroyAllWindows()
-    
-    def step(self, action):
-        # Terminate an episode if:
-        # 1) we lose the game
-        # 2) the agent attempts to use an empty piece
-        # 3) the agent attempts to place a piece in an invalid spot
-        
-        # The action must be in the bounds of the action space first
-        assert self.action_space.contains(action), "Invalid Action"
-        
-    
-        # Add the block to the grid
-        # valid is true if the move was valid, false if not
-        # reward is the additional points from executing that move
-        done, reward = self.execute_action(action)
-    
-        return (self.grid, self.pieces), reward, done, {}
     
     def row_col_clear_points(self, num):
         if num < 1:
@@ -217,7 +241,7 @@ class game_1010_v0(Env):
         else:
             return (10 * num) + self.row_col_clear_points(num - 1)
     
-    def check_valid_move(self, action, ret_grid=True):
+    def check_valid_move(self, action, ret_grid=True, bad_reward=-50):
         ''' 
         Returns:
             done: Boolean - whether the action ends the game or not
@@ -231,7 +255,7 @@ class game_1010_v0(Env):
         # Check if trying to act on a null piece, return if so
         if self.pieces[piece_idx] == 0:
             if ret_grid:
-                return True, self.grid, self.color_grid, 0
+                return True, self.grid, self.color_grid, bad_reward#-self.points - 1
             else:
                 return True
         
@@ -251,7 +275,7 @@ class game_1010_v0(Env):
         if (grid_pos_y + piece_shape[0]) > self.grid_shape[0] or\
         (grid_pos_x + piece_shape[1]) > self.grid_shape[1]:
             if ret_grid:
-                return True, self.grid, self.color_grid, 0
+                return True, self.grid, self.color_grid, bad_reward#-self.points - 1
             else:
                 return True
         
@@ -265,7 +289,7 @@ class game_1010_v0(Env):
         # Check if there are any overlaps, return if so
         if np.max(grid_manip) > 1:
             if ret_grid:
-                return True, self.grid, self.color_grid, 0
+                return True, self.grid, self.color_grid, bad_reward#-self.points - 1
             else:
                 return True
         elif not ret_grid:
@@ -317,18 +341,18 @@ class game_1010_v0(Env):
             self.color_grid[:, col] = np.zeros_like(self.color_grid[:, col])
         
         # Reset the pieces if we just ran out
-        if np.sum(self.pieces) == 0:
+        if np.max(self.pieces) == 0:
             self.pick_new_pieces()
         
-        # Check if there are no more moves
-        for i in range(self.action_space.n):
-            done = self.check_valid_move(i, ret_grid=False)
-            if not done:
-                break
+        self.update_valid_moves()
+
+        if np.max(self.valid_moves) == 0:
+            done = True
+        else:
+            done = False
         
         # Returns done as false if there are remaining moves available
         return done, reward
-    
 
 if __name__ == "__main__":   
     # If you want to test on a specific seed
@@ -349,7 +373,7 @@ if __name__ == "__main__":
         print(action)
         
         # Render the game
-        env.render()
+        env.render("human")
         
         if done == True:
             break
