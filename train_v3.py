@@ -75,6 +75,12 @@ f.close()
 total_lengths = []
 total_rewards = []
 
+# Create a plot of rewards and lengths
+fig, axs = plt.subplots(2, 1, sharey=False, sharex=True)
+axs[0].set_ylabel('Average episode reward')
+axs[1].set_ylabel('Average episode length')
+axs[1].set_xlabel('Iteration #')
+
 # run manual training loop and print results after each iteration
 for idx in range(TRAINING_ITER_STOP):
     results = trainer.train()
@@ -95,15 +101,12 @@ for idx in range(TRAINING_ITER_STOP):
     # Save the checkpoint every 10 iterations
     if idx % 10 == 0:
         trainer.save(f"./checkpoints/{time}")
-
-    plt.close('all')
-    # Create a plot of rewards and lengths
-    fig, axs = plt.subplots(2, 1, sharey=False, sharex=True)
+    
+    # Plot rewards and lengths
+    axs[0].clear()
+    axs[1].clear()
     axs[0].plot(total_rewards)
     axs[1].plot(total_lengths)
-    axs[0].set_ylabel('Average episode reward')
-    axs[1].set_ylabel('Average episode length')
-    axs[1].set_xlabel('Iteration #')
 
     # Save the plot
     fig.savefig(f"./checkpoints/{time}/summary_plots.png", bbox_inches='tight')
@@ -142,4 +145,3 @@ else:
 '''
 print("Finished successfully without selecting invalid actions.")
 ray.shutdown()
-plt.close('all')
