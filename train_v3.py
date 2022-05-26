@@ -3,26 +3,22 @@ Modified from:
 https://github.com/ray-project/ray/blob/7f1bacc7dc9caf6d0ec042e39499bbf1d9a7d065/rllib/examples/action_masking.py
 """
 
-from gym.spaces import Box, Discrete, Tuple
+from gym.spaces import Box, Discrete
 import ray
-from ray import tune
 from ray.rllib.agents import ppo
 #from ray.rllib.examples.env.action_mask_env import ActionMaskEnv
 from environment import game_1010_v1
 from ray.rllib.examples.models.action_mask_model import ActionMaskModel
-from ray.tune.logger import pretty_print
-
+from datetime import datetime
 
 TRAINING_ITER_STOP = 100000
-TIMESTEPS_TOTAL = 1000000
+EPISODE_LEN_MEAN = 1000000
 EPISODE_REWARD_MEAN = 10000000
 
-ray.init()#num_cpus=0, local_mode=True)
+ray.init()
 
 # main part: configure the ActionMaskEnv and ActionMaskModel
 config = {
-    # random env with 100 discrete actions and 5x [-1,1] observations
-    # some actions are declared invalid and lead to errors
     "env": game_1010_v1,
     "env_config": {
         "action_space": Discrete(300),
@@ -31,16 +27,25 @@ config = {
     # the ActionMaskModel retrieves the invalid actions and avoids them
     "model": {
         "custom_model": ActionMaskModel,
-        # disable action masking according to CLI
+        # keep masking enabled
         "custom_model_config": {"no_masking": False},
     },
-    # Use GPUs iff `RLLIB_NUM_GPUS` env var set to > 0.
     "num_gpus": 0,
-    # Run with tracing enabled for tfe/tf2?
-    #"eager_tracing": args.eager_tracing,
-    "horizon": 1000000
+    "num_workers": 4,
+    # max steps in any one episode is 1000000
+    "horizon": EPISODE_LEN_MEAN
 }
+# config["tf_session_args"]["intra_op_parallelism_threads"] = 64
+# config["tf_session_args"]["inter_op_parallelism_threads"] = 64
+# config["local_tf_session_args"]["intra_op_parallelism_threads"] = 64
+# config["local_tf_session_args"]["inter_op_parallelism_threads"] = 64
+#config["num_envs_per_worker"] = 10
+#config["vf_clip_param"] = 10000
+#config['create_env_on_driver'] = True
+#config['render_env'] = True
 
+
+# stop dict is used if training with Ray tune
 stop = {
     "training_iteration": TRAINING_ITER_STOP,
     "timesteps_total": TIMESTEPS_TOTAL,
@@ -51,6 +56,14 @@ stop = {
 ppo_config = ppo.DEFAULT_CONFIG.copy()
 ppo_config.update(config)
 trainer = ppo.PPOTrainer(config=ppo_config, env=game_1010_v1)
+
+time = str(datetime.now())
+time = time[:10] + "_" + time[11:-7]
+time = time.replace(":", "_")
+
+f = open(f"./training_output_{time}.txt", "w")
+f.close()
+
 # run manual training loop and print results after each iteration
 for idx in range(TRAINING_ITER_STOP):
     results = trainer.train()
@@ -59,11 +72,24 @@ for idx in range(TRAINING_ITER_STOP):
     lengths = results["hist_stats"]['episode_lengths']
     print(f"Length min/max/mean = {min(lengths)}/{max(lengths)}/{results['episode_len_mean']}")
 
+    f = open(f"./training_output_{time}.txt", "a")
+    f.write(f"-----EPISODE {idx}-----\n")
+    f.write(f"Reward min/max/mean = {results['episode_reward_min']}/{results['episode_reward_max']}/{results['episode_reward_mean']}\n")
+    f.write(f"Length min/max/mean = {min(lengths)}/{max(lengths)}/{results['episode_len_mean']}")
+    f.close()
+    if idx % 10 == 0:
+        trainer.save(f"./checkpoints/{time}")
+
+
     # stop training if the target train steps or reward are reached
     if (
         results["episode_reward_mean"] >= EPISODE_REWARD_MEAN
+        or results['episode_length_mean'] >= EPISODE_LEN_MEAN
     ):
-        break
+        # if we haven't already saved this time, save
+        if idx % 10 != 0:
+            trainer.save(f"./checkpoints/{time}")
+        break       
 
 # manual test loop
 print("Finished training. Running manual test/inference loop.")
