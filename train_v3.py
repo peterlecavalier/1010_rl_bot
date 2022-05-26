@@ -48,7 +48,6 @@ config = {
 # stop dict is used if training with Ray tune
 stop = {
     "training_iteration": TRAINING_ITER_STOP,
-    "timesteps_total": TIMESTEPS_TOTAL,
     "episode_reward_mean": EPISODE_REWARD_MEAN,
 }
 
@@ -84,7 +83,7 @@ for idx in range(TRAINING_ITER_STOP):
     # stop training if the target train steps or reward are reached
     if (
         results["episode_reward_mean"] >= EPISODE_REWARD_MEAN
-        or results['episode_length_mean'] >= EPISODE_LEN_MEAN
+        or results['episode_len_mean'] >= EPISODE_LEN_MEAN
     ):
         # if we haven't already saved this time, save
         if idx % 10 != 0:
