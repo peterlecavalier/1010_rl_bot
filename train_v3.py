@@ -106,7 +106,7 @@ for idx in range(TRAINING_ITER_STOP):
     axs[1].set_xlabel('Iteration #')
 
     # Save the plot
-    plt.savefig(f"./checkpoints/{time}/summary_plots.png", bbox_inches='tight')
+    fig.savefig(f"./checkpoints/{time}/summary_plots.png", bbox_inches='tight')
 
     # stop training if the target train steps or reward are reached
     if (
