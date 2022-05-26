@@ -106,6 +106,7 @@ for idx in range(TRAINING_ITER_STOP):
 
     # Save the plot
     plt.savefig(f"./checkpoints/{time}/summary_plots.png", bbox_inches='tight')
+    plt.close()
 
     # stop training if the target train steps or reward are reached
     if (
