@@ -96,6 +96,7 @@ for idx in range(TRAINING_ITER_STOP):
     if idx % 10 == 0:
         trainer.save(f"./checkpoints/{time}")
 
+    plt.close('all')
     # Create a plot of rewards and lengths
     fig, axs = plt.subplots(2, 1, sharey=False, sharex=True)
     axs[0].plot(total_rewards)
@@ -106,7 +107,6 @@ for idx in range(TRAINING_ITER_STOP):
 
     # Save the plot
     plt.savefig(f"./checkpoints/{time}/summary_plots.png", bbox_inches='tight')
-    plt.close()
 
     # stop training if the target train steps or reward are reached
     if (
@@ -142,3 +142,4 @@ else:
 '''
 print("Finished successfully without selecting invalid actions.")
 ray.shutdown()
+plt.close('all')
