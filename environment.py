@@ -640,6 +640,37 @@ class game_1010_v1(Env):
         # Returns done as false if there are remaining moves available
         return done, reward
 
+class game_1010_v1_random_start(game_1010_v1):
+    def __init__(self, seed=None):
+        super().__init__(seed)
+    
+    def reset(self):
+        # Reset points back to 0
+        self.points = 0
+        
+        # Generate random pieces
+        self.pick_new_pieces()
+
+        empty_rng = self.rng.random()
+
+        self.color_grid = np.zeros_like(self.color_grid)
+        # If the rng is above 0.5
+        if empty_rng >= 0.5:
+            # Reset grid to be zero everywhere
+            self.grid = np.zeros_like(self.grid)
+        else:
+            self.grid = self.rng.random(self.grid_shape).astype(int)
+            self.color_grid[..., 0] = self.grid * 127
+            self.color_grid[..., 1] = self.grid * 127
+            self.color_grid[..., 2] = self.grid * 127
+            self.color_grid = self.color_grid.astype(int)
+
+        # Update the valid moves
+        self.update_valid_moves()
+
+        return {"action_mask": self.valid_moves, "observations": np.concatenate((self.grid.flatten(), self.pieces))}
+
+
 if __name__ == "__main__":   
     # If you want to test on a specific seed
     # env = game_1010_v0(seed=0)
@@ -691,3 +722,4 @@ if __name__ == "__main__":
     print("HERE")
     # env.render()
     env.close()
+

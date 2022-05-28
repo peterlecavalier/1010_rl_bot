@@ -7,7 +7,7 @@ from gym.spaces import Box, Discrete
 import ray
 from ray.rllib.agents import ppo
 #from ray.rllib.examples.env.action_mask_env import ActionMaskEnv
-from environment import game_1010_v1
+from environment import game_1010_v1, game_1010_v1_random_start
 from ray.rllib.examples.models.action_mask_model import ActionMaskModel
 from datetime import datetime
 import matplotlib.pyplot as plt
@@ -21,7 +21,7 @@ ray.init()
 
 # main part: configure the ActionMaskEnv and ActionMaskModel
 config = {
-    "env": game_1010_v1,
+    "env": game_1010_v1_random_start,
     'gamma': 0.99, 
     'lr': 5e-05,
     "env_config": {
@@ -60,7 +60,7 @@ stop = {
 # manual training loop (no Ray tune)
 ppo_config = ppo.DEFAULT_CONFIG.copy()
 ppo_config.update(config)
-trainer = ppo.PPOTrainer(config=ppo_config, env=game_1010_v1)
+trainer = ppo.PPOTrainer(config=ppo_config, env=game_1010_v1_random_start)
 
 policy = trainer.get_policy()
 policy.model.internal_model.base_model.summary()
@@ -95,7 +95,7 @@ for idx in range(TRAINING_ITER_STOP):
     f = open(f"./training_output_{time}.txt", "a")
     f.write(f"-----EPISODE {idx}-----\n")
     f.write(f"Reward min/max/mean = {results['episode_reward_min']}/{results['episode_reward_max']}/{results['episode_reward_mean']}\n")
-    f.write(f"Length min/max/mean = {min(lengths)}/{max(lengths)}/{results['episode_len_mean']}")
+    f.write(f"Length min/max/mean = {min(lengths)}/{max(lengths)}/{results['episode_len_mean']}\n")
     f.close()
 
     # Save the checkpoint every 10 iterations
@@ -125,7 +125,7 @@ for idx in range(TRAINING_ITER_STOP):
 print("Finished training. Running manual test/inference loop.")
 # prepare environment with max 10 steps
 config["env_config"]["max_episode_len"] = 10
-env = game_1010_v1(config["env_config"])
+env = game_1010_v1_random_start(config["env_config"])
 obs = env.reset()
 done = False
 # run one iteration until done
